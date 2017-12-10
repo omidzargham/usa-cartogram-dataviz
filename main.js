@@ -1,5 +1,5 @@
-var width = 700,
-    height = 600;
+var width = 1000,
+    height = 1000;
 
 var svg = d3.select('body')
     .append('svg')
@@ -15,7 +15,7 @@ var projection = d3.geoAlbersUsa();
 var population = d3.map();
 var medIncome = d3.map();
 
-var radius = d3.scaleSqrt().range([0,10]);
+var radius = d3.scaleSqrt().range([2,50]);
 
 var simulation;
 
@@ -57,12 +57,51 @@ function main(error, geojson, country_data) {
   .force('charge', d3.forceManyBody().strength(1))
   .force('collision', d3.forceCollide().strength(1)
     .radius(function(d) {
-    return radius(d.gdp);
+    return d.r;
     }))
   .on('tick', ticked);
 
-function ticked() {
-}
+  function ticked() {
+    //draw our circles
+    var bubbles = d3.select('svg')
+       .selectAll('circle')
+       .data(nodes, function(d) {
+          return d.name;
+       });
+  
+    bubbles.enter()
+      .append('circle')
+      // allows us to create and update bubbles at same time
+      .merge(bubbles)
+      .attr('r', function(d) {
+        return d.r;
+      })
+      .attr('cx', function(d) {
+        return d.x;
+      })
+      .attr('cy', function(d) {
+        return d.y;
+      })
+      .attr('fill', function(d) {
+        return color(d.r);
+      })
+      .attr('stroke', '#333')
+      .on('mouseover', function(d) {
+        // localetostring -> adds commas to value
+        tooltip.html(d.name + "<br>" + "$" + d.value.toLocaleString());
+        tooltip.style('visibility', 'visible');
+        d3.select(this).attr('stroke', 'green');
+      })
+      .on('mousemove', function() {
+        tooltip.style('top', (d3.event.pageY - 10) + 'px')
+          .style('left', (d3.event.pageX + 10) + 'px');
+          //padding so the cursor doesnt overlap
+      })
+      .on('mouseout', function() {
+        tooltip.style('visibility', 'hidden');
+        d3.select(this).attr('stroke', '#333');
+      });
+  }
 
 }
 
