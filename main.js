@@ -15,7 +15,7 @@ var projection = d3.geoAlbersUsa();
 var population = d3.map();
 var medIncome = d3.map();
 
-var radius = d3.scaleSqrt().range([2,50]);
+var radius = d3.scaleSqrt().range([8,55]);
 
 var simulation;
 
@@ -28,10 +28,14 @@ d3.queue()
   })
   .await(main);
 
-function main(error, geojson, country_data) {
+function main(error, geojson) {
   if (error) throw error;
 
-  radius.domain([0, d3.max(geojson.features, function(d) { return d.properties.population; })]);
+  var extent = d3.extent(geojson.features, function(d) {
+    return d.properties.population;
+  });
+
+  radius.domain(extent);
 
   var nodes = geojson.features.map(function(d) {
     var point = projection(d.geometry.coordinates),
