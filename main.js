@@ -1,6 +1,6 @@
 // set width and height of main svg element 
 var width = 1000,
-    height = 1000;
+    height = 500;
 
 // adding svg element to body of html 
 var svg = d3.select('body')
@@ -8,10 +8,8 @@ var svg = d3.select('body')
     .attr('width', width)
     .attr('height', height)
 
-//colorscale for data points 
-var color = d3.scaleLinear()
-  .interpolate(d3.interpolateHcl)
-  .range(['#007AFF', '#FEB24C']);
+//colorscale for data points
+var color = d3.scaleQuantize();
 
 // the map projection we are using
 var projection = d3.geoAlbersUsa();
@@ -20,39 +18,62 @@ var projection = d3.geoAlbersUsa();
 var population = d3.map();
 var medIncome = d3.map();
 
-// scale for the radius of our circles (the circles represent the data- either population or median income by state) 
-var radius = d3.scaleSqrt().range([8,55]);
+// scale for the radius of our circles (the circles represent the data- 
+// either population or median income by state) 
+// arbitrarily chose 8,59 because it most closely resembled desired output
+var radius = d3.scaleSqrt().range([8,59]);
 
-// our simulation (add more here) 
-//we put this in the global scope so we can access it later (in our update function??)
+// our simulation, defined globally so we use it in the update function
 var simulation;
 
-// use d3-queue to avoid callback hell, and manage how we are loading our datasets asynchronously and ensure the data finishes loading before we call main
+// our legend, defined in globally so we can use it in the update function
+var legend;
+
+// boolean for whether we are showing population or median income
+var showPop = true;
+
+// use d3-queue to avoid callback hell, and manage how we load our datasets
+// asynchronously and ensure the data finishes loading before we call main
 d3.queue()
   .defer(d3.json, 'data/us-states-centroids.json')
   .defer(d3.csv, 'data/acs_pop_income.csv', function(d)  {
     // format our data so all the id's are 2 digits 
     if (d.id.length < 2) d.id = '0' + d.id;
-    //populate our data structures with properly formatted and relevant data (coerced as integers)
+
+    // populate our data structures with properly formatted and relevant 
+    // data (with values coerced as integers)
     population.set(d.id, +d.toal_pop);
     medIncome.set(d.id, +d.median_income);
   })
   // await means not to call main until the previous two defers finish
   .await(main);
 
-// our main callback 
+// our main callback after we load the data
 function main(error, geojson) {
   if (error) throw error;
+   // min and max values of our dataset 
+   var extent = d3.extent(population.values());
 
-  // min and max values of our dataset 
-  var extent = d3.extent(geojson.features, function(d) {
-    return d.properties.population;
-  });
-
-  //set the domain of the radius scale to the extent 
+   //set the domain of the radius scale to the extent 
   radius.domain(extent);
 
-  //refactoring the original data into the structure that we want to create our cartogram 
+  // setting up color scales
+  // extent[1] is the max value of the data
+  // I am essentially dividing the max population by 5, so I partition 
+  // the data into 5 buckets, which I use for the range of the colorscale
+  // and the legend 
+  var partitions = [];
+  for (var i = 1; i < 6; i++){
+    partitions.push((extent[1] / 5)*i);
+  }
+
+  color.domain([0, extent[1]])
+  .range(partitions.map(function(d, i) {
+    return d3.interpolateYlGnBu(i / (5 - 1));
+  }));
+
+
+  //refactoring the data into the structure that we want to create our cartogram 
   var nodes = geojson.features.map(function(d) {
     var point = projection(d.geometry.coordinates),
         value = population.get(d.id);
@@ -71,7 +92,7 @@ function main(error, geojson) {
     };
   });
 
-  // simulation (add more)
+  // our simulation
   simulation = d3.forceSimulation(nodes)
   .force('charge', d3.forceManyBody().strength(1))
   .force('collision', d3.forceCollide().strength(1)
@@ -80,9 +101,10 @@ function main(error, geojson) {
     }))
   .on('tick', ticked);
   
-  // (add )
+  // function for simulation, draws our circles and text labels in the 
+  // main svg element 
   function ticked() {
-    //draw our circles
+    // draw our circles
     var bubbles = d3.select('svg')
        .selectAll('circle')
        .data(nodes, function(d) {
@@ -103,7 +125,7 @@ function main(error, geojson) {
         return d.y;
       })
       .attr('fill', function(d) {
-        return color(d.r);
+        return color(d.value);
       })
       .attr('stroke', '#333')
       // when mouseover event on circle occurs, show the tooltip 
@@ -113,29 +135,92 @@ function main(error, geojson) {
         tooltip.style('visibility', 'visible');
         d3.select(this).attr('stroke', 'green');
       })
+      // padding so the cursor doesnt overlap
       .on('mousemove', function() {
         tooltip.style('top', (d3.event.pageY - 10) + 'px')
           .style('left', (d3.event.pageX + 10) + 'px');
-          //padding so the cursor doesnt overlap
+      
       })
       //when mouseout event occurs, hide the tooltip
       .on('mouseout', function() {
         tooltip.style('visibility', 'hidden');
         d3.select(this).attr('stroke', '#333');
       });
+
+      // adding text labels for each state 
+      var textLabels = d3.select('svg')
+      .selectAll('text')
+      .data(nodes, function(d) {
+         return d.name;
+      });
+      // we need .merge to follow the simlation 
+      textLabels.enter().append("text").merge(textLabels)
+      .attr("x", function(d){return d.x})
+      .attr("y", function(d){return d.y})
+      .attr("text-anchor", "middle")  
+      .style("font-size", "10px")
+      .text(function(d){return d.label});
   }
 
-}
 
-// our tooltip, appends div element to body of html with css features to display the tooltip 
+  // adding our legend 
+  svg.append('g')
+	.attr('class', 'legend')
+	// put the legend to the left of the cartogram
+	.attr('transform', 'translate(0, 300)');
+	// our legend is based on colors, so we use a legendcolor
+  // with a scale set by our color scale
+
+  legend = d3.legendColor()
+  // format the labels to match desired output 
+  .labelFormat(d3.format(".2s"))
+	.title('Total Population')
+	.titleWidth(75)
+  .scale(color);
+
+  svg.select('.legend')
+  .call(legend);
+}
+// our tooltip, appends div element to body of html with css features
+// to display the tooltip 
 var tooltip = d3.select('body')
-  .append('div')
-  .style('position', 'absolute')
-  .style('visibility', 'hidden')
-  .style('color', 'white')
-  .style('padding', '8px')
-  .style('background-color', '#626D71')
-  .style('border-radius', '6px')
-  .style('text-align', 'center')
-  .style('font-family', 'monospace')
-  .text('');
+.append('div')
+.style('position', 'absolute')
+.style('visibility', 'hidden')
+.style('color', 'white')
+.style('padding', '8px')
+.style('background-color', '#626D71')
+.style('border-radius', '6px')
+.style('text-align', 'center')
+.style('font-family', 'monospace')
+.text('');
+
+// adding our html button, by default it shows Median Income
+// on click, calls update fxn 
+d3.select('body').append('text').text("Toggle category: ");
+var button = d3.select('body')
+.append('button')
+.text('Median Income')
+.on('click', update);
+
+// update function called on button click
+function update() {
+  var selection = d3.select('svg').selectAll("circle").data();
+  var extent = d3.extent(medIncome.values());
+  console.log(selection[0]);
+  radius.domain(extent);
+  color.domain(extent);
+  selection[0].value = medIncome.values()[0];
+  selection[0].r = radius(selection[0].value);
+  console.log(selection[0]);
+  svg.select('.legend')
+  .call(legend);
+  simulation.nodes(selection).alpha(1).restart();
+
+  showPop = !showPop;
+  if (!showPop) {
+  button.text("Total Population");
+} else {
+  button.text("Median Income");
+}
+};
