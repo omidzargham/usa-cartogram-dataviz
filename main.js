@@ -20,8 +20,8 @@ var medIncome = d3.map();
 
 // scale for the radius of our circles (the circles represent the data- 
 // either population or median income by state) 
-// arbitrarily chose 8,59 because it most closely resembled desired output
-var radius = d3.scaleSqrt().range([8,59]);
+// arbitrarily chose 8,60 because it most closely resembled desired output
+var radius = d3.scaleSqrt().range([8,60]);
 
 // our simulation, defined globally so we use it in the update function
 var simulation;
@@ -77,7 +77,7 @@ function main(error, geojson) {
   var nodes = geojson.features.map(function(d) {
     var point = projection(d.geometry.coordinates),
         value = population.get(d.id);
-  
+
     return {
       id: d.id,
       name: d.properties.name,
@@ -131,7 +131,11 @@ function main(error, geojson) {
       // when mouseover event on circle occurs, show the tooltip 
       .on('mouseover', function(d) {
         // localetostring -> adds commas to value
-        tooltip.html(d.name + "<br>" + "$" + d.value.toLocaleString());
+        if (showPop) {
+          tooltip.html(d.name + "<br>" + d.value.toLocaleString());
+        } else {
+          tooltip.html(d.name + "<br>" + "$" + d.value.toLocaleString());
+        }
         tooltip.style('visibility', 'visible');
         d3.select(this).attr('stroke', 'green');
       })
@@ -152,8 +156,7 @@ function main(error, geojson) {
       .selectAll('text')
       .data(nodes, function(d) {
          return d.name;
-      });
-      // we need .merge to follow the simlation 
+      }); 
       textLabels.enter().append("text").merge(textLabels)
       .attr("x", function(d){return d.x})
       .attr("y", function(d){return d.y})
@@ -181,6 +184,16 @@ function main(error, geojson) {
   svg.select('.legend')
   .call(legend);
 }
+
+// adding our html button, by default it shows Median Income
+// on click, calls update fxn 
+d3.select('body').append('br');
+d3.select('body').append('text').text("Toggle category: ");
+var button = d3.select('body')
+.append('button')
+.text('Median Income')
+.on('click', update);
+
 // our tooltip, appends div element to body of html with css features
 // to display the tooltip 
 var tooltip = d3.select('body')
@@ -195,29 +208,46 @@ var tooltip = d3.select('body')
 .style('font-family', 'monospace')
 .text('');
 
-// adding our html button, by default it shows Median Income
-// on click, calls update fxn 
-d3.select('body').append('text').text("Toggle category: ");
-var button = d3.select('body')
-.append('button')
-.text('Median Income')
-.on('click', update);
-
 // update function called on button click
 function update() {
+  // get the data already rendered in the DOM
   var selection = d3.select('svg').selectAll("circle").data();
-  var extent = d3.extent(medIncome.values());
-  console.log(selection[0]);
+
+  // set attributes based on whether we are showing income or population
+  // arbitrarily chose range for radius to match desired output
+  var whichData;
+  if (showPop) { 
+    whichData = medIncome;
+    radius.range([23,27]);
+    legend.title("Median Income")
+  } else {
+    whichData = population;
+    radius.range([8,60]);
+    legend.title("Total Population")
+  }
+  // set our scales to the desired data 
+  var extent = d3.extent(whichData.values());
   radius.domain(extent);
-  color.domain(extent);
-  selection[0].value = medIncome.values()[0];
-  selection[0].r = radius(selection[0].value);
-  console.log(selection[0]);
-  svg.select('.legend')
-  .call(legend);
+  color.domain([0, extent[1]]);
+
+  // reset the positions and value based on the desired data
+  // x0 and y0 are the initial positions that never change, 
+  // so I reset the x and y to them 
+  selection.forEach(function(elem) {
+    var value = whichData.get(elem.id);
+    elem.x = elem.x0;
+    elem.y = elem.y0;
+    elem.value = value;
+    elem.r = radius(value);
+  });
+  // redraw legend
+  svg.select('.legend').call(legend);
+  // restart simulation
   simulation.nodes(selection).alpha(1).restart();
 
+  // switch boolean from previous value 
   showPop = !showPop;
+  // edit button text based on boolean 
   if (!showPop) {
   button.text("Total Population");
 } else {
