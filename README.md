@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Final Exam
 Students will make a [**Dorling Cartogram**](http://carto.maps.arcgis.com/apps/StorytellingTextLegend/index.html?appid=b686a7679cb747e9825d1d1bb6b26046) using U.S. Census Data and GeoJSON representing the [centroids](https://en.wikipedia.org/wiki/Centroid) of U.S. States.
 
@@ -90,3 +91,7 @@ For the `update()` (that should happen when a user clicks a button), keep in min
 Remember to refer to the two images above for how the cartogram should look for each data facet. Try to break down each part into a separate problem, take breaks if you get stuck, and remember the d3 documentation and code from previous classes are there to refer to.
 
 GOOD LUCK!!!
+=======
+# usa-cartogram-dataviz
+Dorling Cartogram of US State population and income data using D3.js
+>>>>>>> 71684d8... Initial commit
